@@ -18,7 +18,7 @@ enum CubeColor {
     Blue,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct Cubes {
     red: u32,
     green: u32,
@@ -88,9 +88,7 @@ fn parse_games(input: &str) -> IResult<&str, Vec<Game>> {
     separated_list0(line_ending, parse_game)(input)
 }
 
-fn main() {
-    let input = include_str!("../input.txt");
-    let games = parse_games(input).unwrap().1;
+fn calculate_sum_of_id_of_possible_games(games: &Vec<Game>) -> u32 {
     let sum_of_ids: u32 = games
         .iter()
         .filter_map(|game| {
@@ -100,11 +98,40 @@ fn main() {
                 .then_some(game.id)
         })
         .sum();
+    sum_of_ids
+}
+
+fn calculate_sum_of_power(games: &Vec<Game>) -> u32 {
+    games
+        .iter()
+        .map(|game| {
+            let min_cubes = game
+                .revealed_cubes_set
+                .iter()
+                .copied()
+                .reduce(|acc, e| Cubes {
+                    red: acc.red.max(e.red),
+                    green: acc.green.max(e.green),
+                    blue: acc.blue.max(e.blue),
+                })
+                .expect("revealed cubes should not be empty");
+            min_cubes.red * min_cubes.green * min_cubes.blue
+        })
+        .sum()
+}
+
+fn main() {
+    let input = include_str!("../input.txt");
+    let games = parse_games(input).unwrap().1;
+    let sum_of_ids = calculate_sum_of_id_of_possible_games(&games);
     println!("sum of possible game ids: {}", sum_of_ids);
+    println!("sum of power: {}", calculate_sum_of_power(&games));
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::{calculate_sum_of_power, parse_games, Cubes, Game};
+
     const TEST_INPUT: &'static str = r"Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
 Game 2: 1 blue, 2 green; 3 green, 4 blue, 1 red; 1 green, 1 blue
 Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
@@ -113,99 +140,99 @@ Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green";
 
     #[test]
     fn test_parser() {
-        let (_, games) = super::parse_games(TEST_INPUT).expect("dinnyefa");
+        let (_, games) = parse_games(TEST_INPUT).expect("dinnyefa");
         assert_eq!(
             games,
             vec![
-                super::Game {
+                Game {
                     id: 1,
                     revealed_cubes_set: vec![
-                        super::Cubes {
+                        Cubes {
                             red: 4,
                             green: 0,
                             blue: 3
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 1,
                             green: 2,
                             blue: 6
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 0,
                             green: 2,
                             blue: 0
                         }
                     ],
                 },
-                super::Game {
+                Game {
                     id: 2,
                     revealed_cubes_set: vec![
-                        super::Cubes {
+                        Cubes {
                             red: 0,
                             green: 2,
                             blue: 1
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 1,
                             green: 3,
                             blue: 4
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 0,
                             green: 1,
                             blue: 1
                         },
                     ],
                 },
-                super::Game {
+                Game {
                     id: 3,
                     revealed_cubes_set: vec![
-                        super::Cubes {
+                        Cubes {
                             red: 20,
                             green: 8,
                             blue: 6
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 4,
                             green: 13,
                             blue: 5
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 1,
                             green: 5,
                             blue: 0
                         },
                     ],
                 },
-                super::Game {
+                Game {
                     id: 4,
                     revealed_cubes_set: vec![
-                        super::Cubes {
+                        Cubes {
                             red: 3,
                             green: 1,
                             blue: 6
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 6,
                             green: 3,
                             blue: 0
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 14,
                             green: 3,
                             blue: 15
                         },
                     ],
                 },
-                super::Game {
+                Game {
                     id: 5,
                     revealed_cubes_set: vec![
-                        super::Cubes {
+                        Cubes {
                             red: 6,
                             green: 3,
                             blue: 1
                         },
-                        super::Cubes {
+                        Cubes {
                             red: 1,
                             green: 2,
                             blue: 2
@@ -218,7 +245,7 @@ Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green";
 
     #[test]
     fn test_part_1() {
-        let (_, games) = super::parse_games(TEST_INPUT).unwrap();
+        let games = parse_games(TEST_INPUT).unwrap().1;
         let sum_of_ids: u32 = games
             .iter()
             .filter_map(|game| {
@@ -229,5 +256,12 @@ Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green";
             })
             .sum();
         assert_eq!(sum_of_ids, 8);
+    }
+
+    #[test]
+    fn test_part_2() {
+        let games = parse_games(TEST_INPUT).unwrap().1;
+        let sum_of_power = calculate_sum_of_power(&games);
+        assert_eq!(sum_of_power, 2286);
     }
 }
