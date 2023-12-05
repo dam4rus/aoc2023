@@ -1,3 +1,5 @@
+use std::iter;
+
 #[derive(Debug)]
 struct Rect {
     x1: u32,
@@ -34,7 +36,7 @@ struct SchemaPart {
 }
 
 impl SchemaPart {
-    fn surrounding_area(&self) -> Rect {
+    fn area(&self) -> Rect {
         let width = match &self.kind {
             SchemaPartKind::Number(s) => s.len() as u32,
             _ => 1,
@@ -45,7 +47,10 @@ impl SchemaPart {
             x2: self.position.0.saturating_add(width - 1),
             y2: self.position.1,
         }
-        .inflated()
+    }
+
+    fn surrounding_area(&self) -> Rect {
+        self.area().inflated()
     }
 }
 
@@ -54,34 +59,36 @@ fn parse_input(input: &str) -> Vec<SchemaPart> {
         .lines()
         .enumerate()
         .flat_map(|(y, line)| {
-            let mut schema_parts = Vec::new();
-            let mut iter = line.chars().enumerate().peekable();
-            while let Some((x, c)) = iter.next() {
-                if c == '.' {
-                    continue;
-                }
-                if !c.is_digit(10) {
-                    schema_parts.push(SchemaPart {
-                        position: (x as u32, y as u32),
-                        kind: SchemaPartKind::Symbol(c),
-                    })
-                } else {
-                    let mut part_number = String::from(c);
-                    while let Some((_, c)) = iter.peek() {
-                        if c.is_digit(10) {
-                            part_number.push(*c);
-                            iter.next();
-                        } else {
-                            break;
+            iter::from_fn({
+                let mut iter = line.chars().enumerate().peekable();
+                move || {
+                    while let Some((x, c)) = iter.next() {
+                        if c == '.' {
+                            continue;
                         }
+                        let schema_part_kind = if c.is_digit(10) {
+                            let mut part_number = String::from(c);
+                            while let Some((_, c)) = iter.peek() {
+                                if c.is_digit(10) {
+                                    part_number.push(*c);
+                                    iter.next();
+                                } else {
+                                    break;
+                                }
+                            }
+                            SchemaPartKind::Number(part_number)
+                        } else {
+                            SchemaPartKind::Symbol(c)
+                        };
+                        return Some(SchemaPart {
+                            position: (x as u32, y as u32),
+                            kind: schema_part_kind,
+                        });
                     }
-                    schema_parts.push(SchemaPart {
-                        position: (x as u32, y as u32),
-                        kind: SchemaPartKind::Number(part_number),
-                    });
+                    None
                 }
-            }
-            schema_parts
+            })
+            .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -103,13 +110,51 @@ fn sum_of_valid_number_parts(schema_parts: &Vec<SchemaPart>) -> u32 {
         .map(|number| {
             if let SchemaPartKind::Number(n) = &number.kind {
                 // println!("{}", n);
-                n.parse::<u32>().expect("should be number")
+                n.parse::<u32>().expect("Should be a number")
             } else {
-                panic!("should be number");
+                unreachable!("SchemaPartKind should be Number");
             }
         })
         .sum();
     sum
+}
+
+fn sum_of_gear_ratios(schema_parts: &Vec<SchemaPart>) -> u32 {
+    let (gears, numbers) = {
+        let mut gears = Vec::new();
+        let mut numbers = Vec::new();
+        for schema_part in schema_parts {
+            match schema_part.kind {
+                SchemaPartKind::Number(_) => numbers.push(schema_part),
+                SchemaPartKind::Symbol('*') => gears.push(schema_part),
+                _ => (),
+            }
+        }
+        (gears, numbers)
+    };
+    gears
+        .iter()
+        .filter_map(|gear| {
+            let adjacent_numbers: Vec<&str> = numbers
+                .iter()
+                .filter(|number| number.surrounding_area().contains(gear.position))
+                .map(|number| {
+                    if let SchemaPartKind::Number(n) = &number.kind {
+                        n.as_str()
+                    } else {
+                        unreachable!("SchemaPartKind should be Number");
+                    }
+                })
+                .collect();
+            match adjacent_numbers[..] {
+                [first, second] => Some(
+                    first.parse::<u32>().expect("Should be a number")
+                        * second.parse::<u32>().expect("Should be a number"),
+                ),
+                _ => None,
+            }
+        })
+        .sum()
 }
 
 fn main() {
@@ -119,11 +164,14 @@ fn main() {
         "sum of valid number parts: {}",
         sum_of_valid_number_parts(&schema_parts)
     );
+    println!("sum of gears: {}", sum_of_gear_ratios(&schema_parts));
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_input, sum_of_valid_number_parts, SchemaPart, SchemaPartKind};
+    use crate::{
+        parse_input, sum_of_gear_ratios, sum_of_valid_number_parts, SchemaPart, SchemaPartKind,
+    };
 
     const TEST_INPUT: &'static str = r"467..114..
 ...*......
@@ -160,5 +208,12 @@ mod tests {
         let schema_parts = parse_input(TEST_INPUT);
         let sum = sum_of_valid_number_parts(&schema_parts);
         assert_eq!(sum, 4361);
+    }
+
+    #[test]
+    fn test_part_2() {
+        let schema_parts = parse_input(TEST_INPUT);
+        let sum = sum_of_gear_ratios(&schema_parts);
+        assert_eq!(sum, 467835);
     }
 }
